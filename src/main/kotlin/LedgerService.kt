@@ -3,14 +3,18 @@ package com.bank
 import com.bank.models.Account
 import com.bank.models.Transaction
 import com.bank.models.TransactionType
+import org.slf4j.LoggerFactory
 import java.time.Instant
 import java.util.UUID
 
 class LedgerService(private val repository: LedgerRepository) {
 
+    private val log = LoggerFactory.getLogger("com.bank.ledger")
+
     fun createAccount(): Account {
         val account = Account(uid = UUID.randomUUID().toString())
         repository.save(account)
+        log.info("account.create uid=${account.uid}")
         return account
     }
 
@@ -27,18 +31,28 @@ class LedgerService(private val repository: LedgerRepository) {
         type: TransactionType,
         amount: Long
     ): PutTransactionResult {
-        repository.findAccount(accountUid) ?: return PutTransactionResult.AccountNotFound
+        repository.findAccount(accountUid) ?: run {
+            log.warn("transaction.put accountUid=$accountUid txUid=$transactionUid — account not found")
+            return PutTransactionResult.AccountNotFound
+        }
 
         val existing = repository.findTransaction(transactionUid)
         if (existing != null) {
-            return if (existing.type == type && existing.amount == amount)
+            return if (existing.type == type && existing.amount == amount) {
+                log.info("transaction.put accountUid=$accountUid txUid=$transactionUid — idempotent repeat")
                 PutTransactionResult.Success(existing)
-            else
+            } else {
+                log.warn("transaction.put accountUid=$accountUid txUid=$transactionUid — conflict with existing transaction")
                 PutTransactionResult.Conflict
+            }
         }
 
         if (type == TransactionType.WITHDRAWAL) {
-            if (amount > balanceFor(accountUid)) return PutTransactionResult.InsufficientFunds
+            val balance = balanceFor(accountUid)
+            if (amount > balance) {
+                log.warn("transaction.put accountUid=$accountUid txUid=$transactionUid — insufficient funds amount=$amount balance=$balance")
+                return PutTransactionResult.InsufficientFunds
+            }
         }
 
         val tx = Transaction(
@@ -49,6 +63,7 @@ class LedgerService(private val repository: LedgerRepository) {
             timestamp = Instant.now().toString()
         )
         repository.save(tx)
+        log.info("transaction.put accountUid=$accountUid txUid=$transactionUid type=$type amount=$amount")
         return PutTransactionResult.Success(tx)
     }
 
