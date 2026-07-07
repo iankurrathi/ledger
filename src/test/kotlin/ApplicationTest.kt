@@ -2,6 +2,8 @@ package com.bank
 
 import com.bank.dto.TransactionResponse
 import com.bank.models.TransactionType
+import com.bank.repository.AccountRepository
+import com.bank.repository.TransactionRepository
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
@@ -12,7 +14,7 @@ import kotlin.test.*
 class ApplicationShould {
 
     private fun ApplicationTestBuilder.setupApp(
-        service: LedgerService = LedgerService(LedgerRepository())
+        service: LedgerService = LedgerService(AccountRepository(), TransactionRepository())
     ) {
         application { module(service) }
     }

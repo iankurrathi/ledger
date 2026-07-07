@@ -3,17 +3,22 @@ package com.bank
 import com.bank.models.Account
 import com.bank.models.Transaction
 import com.bank.models.TransactionType
+import com.bank.repository.AccountRepository
+import com.bank.repository.TransactionRepository
 import org.slf4j.LoggerFactory
 import java.time.Instant
 import java.util.UUID
 
-class LedgerService(private val repository: LedgerRepository) {
+class LedgerService(
+    private val accountRepository: AccountRepository,
+    private val transactionRepository: TransactionRepository
+) {
 
     private val log = LoggerFactory.getLogger("com.bank.ledger")
 
     fun createAccount(): Account {
         val account = Account(uid = UUID.randomUUID().toString())
-        repository.save(account)
+        accountRepository.save(account)
         log.info("account.create uid=${account.uid}")
         return account
     }
@@ -31,12 +36,12 @@ class LedgerService(private val repository: LedgerRepository) {
         type: TransactionType,
         amount: Long
     ): PutTransactionResult {
-        repository.findAccount(accountUid) ?: run {
+        accountRepository.find(accountUid) ?: run {
             log.warn("transaction.put accountUid=$accountUid txUid=$transactionUid — account not found")
             return PutTransactionResult.AccountNotFound
         }
 
-        val existing = repository.findTransaction(transactionUid)
+        val existing = transactionRepository.find(transactionUid)
         if (existing != null) {
             return if (existing.type == type && existing.amount == amount) {
                 log.info("transaction.put accountUid=$accountUid txUid=$transactionUid — idempotent repeat")
@@ -62,23 +67,23 @@ class LedgerService(private val repository: LedgerRepository) {
             amount = amount,
             timestamp = Instant.now().toString()
         )
-        repository.save(tx)
+        transactionRepository.save(tx)
         log.info("transaction.put accountUid=$accountUid txUid=$transactionUid type=$type amount=$amount")
         return PutTransactionResult.Success(tx)
     }
 
     fun getBalance(accountUid: String): Long? {
-        repository.findAccount(accountUid) ?: return null
+        accountRepository.find(accountUid) ?: return null
         return balanceFor(accountUid)
     }
 
     fun getTransactions(accountUid: String): List<Transaction>? {
-        repository.findAccount(accountUid) ?: return null
-        return repository.findTransactions(accountUid)
+        accountRepository.find(accountUid) ?: return null
+        return transactionRepository.findAll(accountUid)
     }
 
     private fun balanceFor(accountUid: String): Long =
-        repository.findTransactions(accountUid).sumOf { tx ->
+        transactionRepository.findAll(accountUid).sumOf { tx ->
             if (tx.type == TransactionType.DEPOSIT) tx.amount else -tx.amount
         }
 }
