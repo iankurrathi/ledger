@@ -1,6 +1,6 @@
 package com.bank
 
-import com.bank.models.Transaction
+import com.bank.dto.TransactionResponse
 import com.bank.models.TransactionType
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
@@ -49,7 +49,7 @@ class LedgerTest {
         val accountUid = client.post("/accounts").uid()
         val response = putTransaction(accountUid, "tx-1", TransactionType.DEPOSIT, 1000)
         assertEquals(HttpStatusCode.OK, response.status)
-        val tx = response.bodyAsText().toTransaction()
+        val tx = response.bodyAsText().toTransactionResponse()
         assertEquals("tx-1", tx.uid)
         assertEquals(accountUid, tx.accountUid)
         assertEquals(TransactionType.DEPOSIT, tx.type)
@@ -63,7 +63,7 @@ class LedgerTest {
         putTransaction(accountUid, "tx-1", TransactionType.DEPOSIT, 1000)
         val response = putTransaction(accountUid, "tx-2", TransactionType.WITHDRAWAL, 400)
         assertEquals(HttpStatusCode.OK, response.status)
-        assertEquals(TransactionType.WITHDRAWAL, response.bodyAsText().toTransaction().type)
+        assertEquals(TransactionType.WITHDRAWAL, response.bodyAsText().toTransactionResponse().type)
     }
 
     @Test
@@ -155,7 +155,7 @@ class LedgerTest {
         val accountUid = client.post("/accounts").uid()
         val response = client.get("/accounts/$accountUid/transactions")
         assertEquals(HttpStatusCode.OK, response.status)
-        assertEquals(0, Json.decodeFromString<List<Transaction>>(response.bodyAsText()).size)
+        assertEquals(0, Json.decodeFromString<List<TransactionResponse>>(response.bodyAsText()).size)
     }
 
     @Test
@@ -166,7 +166,7 @@ class LedgerTest {
         putTransaction(accountUid, "tx-2", TransactionType.WITHDRAWAL, 300)
         val response = client.get("/accounts/$accountUid/transactions")
         assertEquals(HttpStatusCode.OK, response.status)
-        val txs = Json.decodeFromString<List<Transaction>>(response.bodyAsText())
+        val txs = Json.decodeFromString<List<TransactionResponse>>(response.bodyAsText())
         assertEquals(2, txs.size)
         assertEquals("tx-1", txs[0].uid)
         assertEquals("tx-2", txs[1].uid)
@@ -179,7 +179,7 @@ class LedgerTest {
         val acc2 = client.post("/accounts").uid()
         putTransaction(acc1, "tx-1", TransactionType.DEPOSIT, 1000)
         putTransaction(acc2, "tx-2", TransactionType.DEPOSIT, 500)
-        val txs = Json.decodeFromString<List<Transaction>>(
+        val txs = Json.decodeFromString<List<TransactionResponse>>(
             client.get("/accounts/$acc1/transactions").bodyAsText()
         )
         assertEquals(1, txs.size)
@@ -212,5 +212,5 @@ class LedgerTest {
 
     private fun String.toJsonObject(): JsonObject = Json.parseToJsonElement(this).jsonObject
 
-    private fun String.toTransaction(): Transaction = Json.decodeFromString(this)
+    private fun String.toTransactionResponse(): TransactionResponse = Json.decodeFromString(this)
 }

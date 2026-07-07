@@ -1,12 +1,13 @@
 package com.bank
 
-import com.bank.models.TransactionType
+import com.bank.dto.BalanceResponse
+import com.bank.dto.TransactionRequest
+import com.bank.dto.toResponse
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import kotlinx.serialization.Serializable
 
 fun Application.configureRouting() {
     val service = attributes[LedgerServiceKey]
@@ -21,7 +22,7 @@ fun Application.configureRouting() {
             val body = call.receive<TransactionRequest>()
             when (val result = service.putTransaction(accountUid, transactionUid, body.type, body.amount)) {
                 is LedgerService.PutTransactionResult.Success ->
-                    call.respond(HttpStatusCode.OK, result.transaction)
+                    call.respond(HttpStatusCode.OK, result.transaction.toResponse())
                 LedgerService.PutTransactionResult.AccountNotFound ->
                     call.respond(HttpStatusCode.NotFound)
                 LedgerService.PutTransactionResult.Conflict ->
@@ -42,13 +43,7 @@ fun Application.configureRouting() {
             val accountUid = call.parameters["accountUid"]!!
             val txs = service.getTransactions(accountUid)
             if (txs == null) call.respond(HttpStatusCode.NotFound)
-            else call.respond(txs)
+            else call.respond(txs.map { it.toResponse() })
         }
     }
 }
-
-@Serializable
-private data class TransactionRequest(val type: TransactionType, val amount: Long)
-
-@Serializable
-data class BalanceResponse(val balance: Long)
