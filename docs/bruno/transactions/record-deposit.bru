@@ -1,0 +1,18 @@
+meta {
+  name: Record Deposit
+  type: http
+  seq: 2
+}
+
+put {
+  url: {{baseUrl}}/accounts/{{accountUid}}/transactions/{{transactionUid}}
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "type": "DEPOSIT",
+    "amount": 1000
+  }
+}
