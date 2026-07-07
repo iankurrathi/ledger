@@ -3,6 +3,4 @@ ktor:
     port: 8080
   application:
     modules:
-      - com.bank.SerializationKt.configureSerialization
-      - com.bank.LedgerKt.configureLedger
-      - com.bank.RoutingKt.configureRouting
+      - com.bank.ApplicationKt.module

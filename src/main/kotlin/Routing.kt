@@ -9,8 +9,7 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 
-fun Application.configureRouting() {
-    val service = attributes[LedgerServiceKey]
+fun Application.configureRouting(service: LedgerService) {
     routing {
         post("/accounts") {
             call.respond(HttpStatusCode.Created, service.createAccount())

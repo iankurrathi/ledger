@@ -9,16 +9,12 @@ import io.ktor.server.testing.*
 import kotlinx.serialization.json.*
 import kotlin.test.*
 
-class LedgerTest {
+class ApplicationShould {
 
     private fun ApplicationTestBuilder.setupApp(
         service: LedgerService = LedgerService(LedgerRepository())
     ) {
-        application {
-            attributes.put(LedgerServiceKey, service)
-            configureSerialization()
-            configureRouting()
-        }
+        application { module(service) }
     }
 
     // ── POST /accounts ──────────────────────────────────────────────────────
