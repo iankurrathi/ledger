@@ -52,11 +52,13 @@ curl http://localhost:8080/accounts/{accountUid}/balance
 curl http://localhost:8080/accounts/{accountUid}/transactions
 ```
 
-## Notes
+## Assumptions
 
-- `amount` is a positive `Long` (minor currency units, e.g. pence/cents)
-- Transaction UIDs are client-generated — PUT is idempotent; same UID + same body returns the existing transaction, same UID + different body returns 409
+- Multi-account; each account is created via `POST /accounts` — no auth
+- `amount` is a positive `Long` (minor currency units, e.g. pence/cents); `type: DEPOSIT | WITHDRAWAL` determines direction
+- Transaction UIDs are client-generated — PUT is idempotent; same UID + same body → 200, same UID + different body → 409 Conflict
 - Withdrawals that exceed the balance return 422
+- Timestamps are server-assigned (UTC ISO-8601)
 - Data is in-memory and resets on restart
 
 ## Test
