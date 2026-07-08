@@ -10,6 +10,7 @@ import io.ktor.http.*
 import io.ktor.server.testing.*
 import kotlinx.serialization.json.*
 import kotlin.test.*
+import kotlin.uuid.Uuid
 
 class ApplicationShould {
 
@@ -28,7 +29,7 @@ class ApplicationShould {
         assertEquals(HttpStatusCode.Created, response.status)
         val uid = response.bodyAsText().toJsonObject()["uid"]?.jsonPrimitive?.content
         assertNotNull(uid)
-        assertTrue(uid.isNotBlank())
+        assertNotNull(Uuid.parse(uid))
     }
 
     @Test
@@ -45,10 +46,11 @@ class ApplicationShould {
     fun `PUT transaction records a deposit`() = testApplication {
         setupApp()
         val accountUid = client.post("/accounts").uid()
-        val response = putTransaction(accountUid, "tx-1", TransactionType.DEPOSIT, 1000)
+        val txUid = Uuid.random()
+        val response = putTransaction(accountUid, txUid, TransactionType.DEPOSIT, 1000)
         assertEquals(HttpStatusCode.OK, response.status)
         val tx = response.bodyAsText().toTransactionResponse()
-        assertEquals("tx-1", tx.uid)
+        assertEquals(txUid, tx.uid)
         assertEquals(accountUid, tx.accountUid)
         assertEquals(TransactionType.DEPOSIT, tx.type)
         assertEquals(1000L, tx.amount)
@@ -58,8 +60,8 @@ class ApplicationShould {
     fun `PUT transaction records a withdrawal`() = testApplication {
         setupApp()
         val accountUid = client.post("/accounts").uid()
-        putTransaction(accountUid, "tx-1", TransactionType.DEPOSIT, 1000)
-        val response = putTransaction(accountUid, "tx-2", TransactionType.WITHDRAWAL, 400)
+        putTransaction(accountUid, Uuid.random(), TransactionType.DEPOSIT, 1000)
+        val response = putTransaction(accountUid, Uuid.random(), TransactionType.WITHDRAWAL, 400)
         assertEquals(HttpStatusCode.OK, response.status)
         assertEquals(TransactionType.WITHDRAWAL, response.bodyAsText().toTransactionResponse().type)
     }
@@ -68,8 +70,9 @@ class ApplicationShould {
     fun `PUT transaction is idempotent — same body returns 200 with original`() = testApplication {
         setupApp()
         val accountUid = client.post("/accounts").uid()
-        putTransaction(accountUid, "tx-1", TransactionType.DEPOSIT, 1000)
-        val response = putTransaction(accountUid, "tx-1", TransactionType.DEPOSIT, 1000)
+        val txUid = Uuid.random()
+        putTransaction(accountUid, txUid, TransactionType.DEPOSIT, 1000)
+        val response = putTransaction(accountUid, txUid, TransactionType.DEPOSIT, 1000)
         assertEquals(HttpStatusCode.OK, response.status)
     }
 
@@ -77,8 +80,9 @@ class ApplicationShould {
     fun `PUT transaction same uid different amount returns 409`() = testApplication {
         setupApp()
         val accountUid = client.post("/accounts").uid()
-        putTransaction(accountUid, "tx-1", TransactionType.DEPOSIT, 1000)
-        val response = putTransaction(accountUid, "tx-1", TransactionType.DEPOSIT, 2000)
+        val txUid = Uuid.random()
+        putTransaction(accountUid, txUid, TransactionType.DEPOSIT, 1000)
+        val response = putTransaction(accountUid, txUid, TransactionType.DEPOSIT, 2000)
         assertEquals(HttpStatusCode.Conflict, response.status)
     }
 
@@ -86,24 +90,35 @@ class ApplicationShould {
     fun `PUT transaction same uid different type returns 409`() = testApplication {
         setupApp()
         val accountUid = client.post("/accounts").uid()
-        putTransaction(accountUid, "tx-1", TransactionType.DEPOSIT, 1000)
-        val response = putTransaction(accountUid, "tx-1", TransactionType.WITHDRAWAL, 1000)
+        val txUid = Uuid.random()
+        putTransaction(accountUid, txUid, TransactionType.DEPOSIT, 1000)
+        val response = putTransaction(accountUid, txUid, TransactionType.WITHDRAWAL, 1000)
         assertEquals(HttpStatusCode.Conflict, response.status)
     }
 
     @Test
     fun `PUT transaction on unknown account returns 404`() = testApplication {
         setupApp()
-        val response = putTransaction("no-such-account", "tx-1", TransactionType.DEPOSIT, 1000)
+        val response = putTransaction(Uuid.random(), Uuid.random(), TransactionType.DEPOSIT, 1000)
         assertEquals(HttpStatusCode.NotFound, response.status)
+    }
+
+    @Test
+    fun `PUT transaction with invalid account uid returns 400`() = testApplication {
+        setupApp()
+        val response = client.put("/accounts/not-a-uuid/transactions/${Uuid.random()}") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"type":"DEPOSIT","amount":1000}""")
+        }
+        assertEquals(HttpStatusCode.BadRequest, response.status)
     }
 
     @Test
     fun `PUT withdrawal exceeding balance returns 422`() = testApplication {
         setupApp()
         val accountUid = client.post("/accounts").uid()
-        putTransaction(accountUid, "tx-1", TransactionType.DEPOSIT, 500)
-        val response = putTransaction(accountUid, "tx-2", TransactionType.WITHDRAWAL, 501)
+        putTransaction(accountUid, Uuid.random(), TransactionType.DEPOSIT, 500)
+        val response = putTransaction(accountUid, Uuid.random(), TransactionType.WITHDRAWAL, 501)
         assertEquals(HttpStatusCode.UnprocessableEntity, response.status)
     }
 
@@ -111,8 +126,8 @@ class ApplicationShould {
     fun `PUT withdrawal exactly equal to balance succeeds`() = testApplication {
         setupApp()
         val accountUid = client.post("/accounts").uid()
-        putTransaction(accountUid, "tx-1", TransactionType.DEPOSIT, 500)
-        val response = putTransaction(accountUid, "tx-2", TransactionType.WITHDRAWAL, 500)
+        putTransaction(accountUid, Uuid.random(), TransactionType.DEPOSIT, 500)
+        val response = putTransaction(accountUid, Uuid.random(), TransactionType.WITHDRAWAL, 500)
         assertEquals(HttpStatusCode.OK, response.status)
     }
 
@@ -131,9 +146,9 @@ class ApplicationShould {
     fun `GET balance reflects deposits and withdrawals`() = testApplication {
         setupApp()
         val accountUid = client.post("/accounts").uid()
-        putTransaction(accountUid, "tx-1", TransactionType.DEPOSIT, 1000)
-        putTransaction(accountUid, "tx-2", TransactionType.DEPOSIT, 500)
-        putTransaction(accountUid, "tx-3", TransactionType.WITHDRAWAL, 300)
+        putTransaction(accountUid, Uuid.random(), TransactionType.DEPOSIT, 1000)
+        putTransaction(accountUid, Uuid.random(), TransactionType.DEPOSIT, 500)
+        putTransaction(accountUid, Uuid.random(), TransactionType.WITHDRAWAL, 300)
         val response = client.get("/accounts/$accountUid/balance")
         assertEquals(HttpStatusCode.OK, response.status)
         assertEquals(1200L, response.balance())
@@ -142,7 +157,7 @@ class ApplicationShould {
     @Test
     fun `GET balance on unknown account returns 404`() = testApplication {
         setupApp()
-        assertEquals(HttpStatusCode.NotFound, client.get("/accounts/unknown/balance").status)
+        assertEquals(HttpStatusCode.NotFound, client.get("/accounts/${Uuid.random()}/balance").status)
     }
 
     // ── GET /accounts/{accountUid}/transactions ──────────────────────────────
@@ -160,14 +175,16 @@ class ApplicationShould {
     fun `GET transactions returns history in insertion order`() = testApplication {
         setupApp()
         val accountUid = client.post("/accounts").uid()
-        putTransaction(accountUid, "tx-1", TransactionType.DEPOSIT, 1000)
-        putTransaction(accountUid, "tx-2", TransactionType.WITHDRAWAL, 300)
+        val tx1 = Uuid.random()
+        val tx2 = Uuid.random()
+        putTransaction(accountUid, tx1, TransactionType.DEPOSIT, 1000)
+        putTransaction(accountUid, tx2, TransactionType.WITHDRAWAL, 300)
         val response = client.get("/accounts/$accountUid/transactions")
         assertEquals(HttpStatusCode.OK, response.status)
         val txs = Json.decodeFromString<List<TransactionResponse>>(response.bodyAsText())
         assertEquals(2, txs.size)
-        assertEquals("tx-1", txs[0].uid)
-        assertEquals("tx-2", txs[1].uid)
+        assertEquals(tx1, txs[0].uid)
+        assertEquals(tx2, txs[1].uid)
     }
 
     @Test
@@ -175,26 +192,27 @@ class ApplicationShould {
         setupApp()
         val acc1 = client.post("/accounts").uid()
         val acc2 = client.post("/accounts").uid()
-        putTransaction(acc1, "tx-1", TransactionType.DEPOSIT, 1000)
-        putTransaction(acc2, "tx-2", TransactionType.DEPOSIT, 500)
+        val tx1 = Uuid.random()
+        putTransaction(acc1, tx1, TransactionType.DEPOSIT, 1000)
+        putTransaction(acc2, Uuid.random(), TransactionType.DEPOSIT, 500)
         val txs = Json.decodeFromString<List<TransactionResponse>>(
             client.get("/accounts/$acc1/transactions").bodyAsText()
         )
         assertEquals(1, txs.size)
-        assertEquals("tx-1", txs[0].uid)
+        assertEquals(tx1, txs[0].uid)
     }
 
     @Test
     fun `GET transactions on unknown account returns 404`() = testApplication {
         setupApp()
-        assertEquals(HttpStatusCode.NotFound, client.get("/accounts/unknown/transactions").status)
+        assertEquals(HttpStatusCode.NotFound, client.get("/accounts/${Uuid.random()}/transactions").status)
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────
 
     private suspend fun ApplicationTestBuilder.putTransaction(
-        accountUid: String,
-        txUid: String,
+        accountUid: Uuid,
+        txUid: Uuid,
         type: TransactionType,
         amount: Long
     ): HttpResponse = client.put("/accounts/$accountUid/transactions/$txUid") {
@@ -202,8 +220,8 @@ class ApplicationShould {
         setBody("""{"type":"$type","amount":$amount}""")
     }
 
-    private suspend fun HttpResponse.uid(): String =
-        bodyAsText().toJsonObject()["uid"]!!.jsonPrimitive.content
+    private suspend fun HttpResponse.uid(): Uuid =
+        Uuid.parse(bodyAsText().toJsonObject()["uid"]!!.jsonPrimitive.content)
 
     private suspend fun HttpResponse.balance(): Long =
         bodyAsText().toJsonObject()["balance"]!!.jsonPrimitive.long

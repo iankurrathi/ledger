@@ -8,6 +8,7 @@ import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import kotlin.uuid.Uuid
 
 fun Application.configureRouting(service: LedgerService) {
     routing {
@@ -16,8 +17,10 @@ fun Application.configureRouting(service: LedgerService) {
         }
 
         put("/accounts/{accountUid}/transactions/{transactionUid}") {
-            val accountUid = call.parameters["accountUid"]!!
-            val transactionUid = call.parameters["transactionUid"]!!
+            val accountUid = call.parameters["accountUid"]!!.toUuidOrNull()
+                ?: return@put call.respond(HttpStatusCode.BadRequest)
+            val transactionUid = call.parameters["transactionUid"]!!.toUuidOrNull()
+                ?: return@put call.respond(HttpStatusCode.BadRequest)
             val body = call.receive<TransactionRequest>()
             when (val result = service.putTransaction(accountUid, transactionUid, body.type, body.amount)) {
                 is LedgerService.PutTransactionResult.Success ->
@@ -32,17 +35,21 @@ fun Application.configureRouting(service: LedgerService) {
         }
 
         get("/accounts/{accountUid}/balance") {
-            val accountUid = call.parameters["accountUid"]!!
+            val accountUid = call.parameters["accountUid"]!!.toUuidOrNull()
+                ?: return@get call.respond(HttpStatusCode.BadRequest)
             val balance = service.getBalance(accountUid)
             if (balance == null) call.respond(HttpStatusCode.NotFound)
             else call.respond(BalanceResponse(balance))
         }
 
         get("/accounts/{accountUid}/transactions") {
-            val accountUid = call.parameters["accountUid"]!!
+            val accountUid = call.parameters["accountUid"]!!.toUuidOrNull()
+                ?: return@get call.respond(HttpStatusCode.BadRequest)
             val txs = service.getTransactions(accountUid)
             if (txs == null) call.respond(HttpStatusCode.NotFound)
             else call.respond(txs.map { it.toResponse() })
         }
     }
 }
+
+private fun String.toUuidOrNull(): Uuid? = try { Uuid.parse(this) } catch (_: Exception) { null }

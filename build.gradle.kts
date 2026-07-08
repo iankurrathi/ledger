@@ -14,6 +14,10 @@ application {
 
 kotlin {
     jvmToolchain(21)
+    sourceSets.all {
+        languageSettings.optIn("kotlin.uuid.ExperimentalUuidApi")
+        languageSettings.optIn("kotlin.time.ExperimentalTime")
+    }
 }
 dependencies {
     implementation(ktorLibs.serialization.kotlinx.json)
