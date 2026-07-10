@@ -67,7 +67,7 @@ class ApplicationShould {
     }
 
     @Test
-    fun `PUT transaction is idempotent — same body returns 200 with original`() = testApplication {
+    fun `PUT transaction is idempotent - same body returns 200 with original`() = testApplication {
         setupApp()
         val accountUid = client.post("/accounts").uid()
         val txUid = Uuid.random()
